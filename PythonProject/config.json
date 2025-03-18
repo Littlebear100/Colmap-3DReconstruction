@@ -1,0 +1,10 @@
+{
+    "input_folder": "D:\\Littlebear\\PythonProject\\rawImages",
+    "output_folder": "D:\\Littlebear\\PythonProject\\images",
+    "workspace_folder": "D:\\Littlebear\\PythonProject\\workspace",
+    "mesh_file": "D:\\Littlebear\\PythonProject\\workspace\\dense\\meshed.ply",
+    "colmap_executable": "D:\\Littlebear\\COLMAP\\colmap-x64-windows-cuda\\Colmap.bat",
+    "apply_denoise": true,
+    "apply_enhance": true,
+    "apply_sharpen": true
+}
