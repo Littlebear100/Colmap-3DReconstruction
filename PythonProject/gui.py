@@ -2,12 +2,12 @@ import sys
 import subprocess
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QLabel, QLineEdit, QMessageBox, QFrame, QTextEdit
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QFont, QPalette, QBrush, QLinearGradient, QColor, QIcon
+from PySide6.QtGui import QFont, QPalette, QBrush, QLinearGradient, QColor
 from multiprocessing import Queue
 
 class Worker(QThread):
-    finished = Signal(str)  # 修改信号参数为字符串
-    progress_message = Signal(str)  # 定义进度信息信号
+    finished = Signal(str)
+    progress_message = Signal(str)
 
     def __init__(self, command, progress_queue=None):
         super().__init__()
@@ -16,7 +16,7 @@ class Worker(QThread):
         self.error_message = None
 
     def run(self):
-        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', shell=True)
         while process.poll() is None:
             if self.progress_queue and not self.progress_queue.empty():
                 message = self.progress_queue.get()
@@ -26,15 +26,14 @@ class Worker(QThread):
             self.error_message = stderr
         else:
             self.error_message = None
-        self.finished.emit(self.error_message or "成功")  # 发送完成信号，并附带成功或错误信息
+        self.finished.emit(self.error_message or "成功")
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("三维重建软件")
-        self.setGeometry(100, 100, 580, 520)  # 缩小窗口尺寸
+        self.setGeometry(100, 100, 580, 520)
 
-        # 设置渐变背景颜色
         self.setAutoFillBackground(True)
         palette = QPalette()
         gradient = QLinearGradient(0, 0, 0, 1)
@@ -44,98 +43,97 @@ class MainWindow(QMainWindow):
         palette.setBrush(QPalette.Window, QBrush(gradient))
         self.setPalette(palette)
 
-        # 使用Microsoft YaHei UI字体
         font = QFont("Microsoft YaHei UI", 12)
 
         self.setStyleSheet("""
-                    QMainWindow {
-                        background-color: transparent; /* 使用渐变背景 */
-                    }
-                    QLabel#TitleLabel {
-                        font-size: 20px;
-                        font-weight: bold;
-                        color: #333333;
-                        qproperty-alignment: AlignCenter;
-                        font-family: "Microsoft YaHei UI", Arial, sans-serif;
-                    }
-                    QLabel#DescriptionLabel {
-                        font-size: 14px;
-                        color: #666666;
-                        qproperty-alignment: AlignCenter;
-                        font-family: "Microsoft YaHei UI", Arial, sans-serif;
-                    }
-                    QLineEdit {
-                        padding: 4px;
-                        border: 1px solid #cccccc;
-                        border-radius: 5px;
-                        background-color: #ffffff;
-                        color: #000000;
-                        font-size: 12px;
-                        font-family: "Microsoft YaHei UI", Arial, sans-serif;
-                    }
-                    QPushButton {
-                        border: none;
-                        border-radius: 5px;
-                        padding: 6px;
-                        font-family: "Microsoft YaHei UI", Arial, sans-serif;
-                    }
-                    QPushButton#PrimaryButton {
-                        background-color: #007BFF;
-                        color: #ffffff;
-                        font-weight: 500;  /* 适度加粗 */
-                        font-size: 14px;    /* 适度调整字体大小 */
-                    }
-                    QPushButton#PrimaryButton:hover {
-                        background-color: #0056b3;
-                    }
-                    QPushButton#PrimaryButton:pressed {
-                        background-color: #003d80;
-                    }
-                    QPushButton#SecondaryButton {
-                        background-color: #66BB6A; /* 设置按钮的默认背景颜色为浅绿色 */
-                        color: #ffffff;
-                        font-weight: 500;  /* 适度加粗 */
-                        font-size: 14px;    /* 适度调整字体大小 */
-                    }
-                    QPushButton#SecondaryButton:hover {
-                        background-color: #5DAE59; /* 鼠标悬停时背景颜色变深 */
-                    }
-                    QPushButton#SecondaryButton:pressed {
-                        background-color: #4C8C4A;
-                    }
-                    QFrame {
-                        border-radius: 10px;
-                        padding: 10px;
-                    }
-                    QFrame#ImageProcessFrame {
-                        background-color: #e6f7ff;
-                    }
-                    QFrame#ReconstructionFrame {
-                        background-color: #fff2e6;
-                    }
-                    QFrame#VisualizationFrame {
-                        background-color: #e6ffe6;
-                    }
-                    QMessageBox {
-                        background-color: #2e2e2e;
-                        color: white;
-                        border-radius: 10px;
-                    }
-                    QLabel {
-                        color: white;
-                        font-size: 14px;
-                        font-family: "Microsoft YaHei UI", Arial, sans-serif;
-                    }
-                    QTextEdit {
-                        background-color: #ffffff;
-                        color: #000000;
-                        font-size: 14px;
-                        font-family: "Microsoft YaHei UI", Arial, sans-serif;
-                    }
-                """)
+            QMainWindow {
+                background-color: transparent;
+            }
+            QLabel#TitleLabel {
+                font-size: 20px;
+                font-weight: bold;
+                color: #333333;
+                qproperty-alignment: AlignCenter;
+                font-family: "Microsoft YaHei UI", Arial, sans-serif;
+            }
+            QLabel#DescriptionLabel {
+                font-size: 14px;
+                color: #666666;
+                qproperty-alignment: AlignCenter;
+                font-family: "Microsoft YaHei UI", Arial, sans-serif;
+            }
+            QLineEdit {
+                padding: 4px;
+                border: 1px solid #cccccc;
+                border-radius: 5px;
+                background-color: #ffffff;
+                color: #000000;
+                font-size: 12px;
+                font-family: "Microsoft YaHei UI", Arial, sans-serif;
+            }
+            QPushButton {
+                border: none;
+                border-radius: 5px;
+                padding: 6px;
+                font-family: "Microsoft YaHei UI", Arial, sans-serif;
+            }
+            QPushButton#PrimaryButton {
+                background-color: #007BFF;
+                color: #ffffff;
+                font-weight: 500;
+                font-size: 14px;
+            }
+            QPushButton#PrimaryButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton#PrimaryButton:pressed {
+                background-color: #003d80;
+            }
+            QPushButton#SecondaryButton {
+                background-color: #66BB6A;
+                color: #ffffff;
+                font-weight: 500;
+                font-size: 14px;
+            }
+            QPushButton#SecondaryButton:hover {
+                background-color: #5DAE59;
+            }
+            QPushButton#SecondaryButton:pressed {
+                background-color: #4C8C4A;
+            }
+            QFrame {
+                border-radius: 10px;
+                padding: 10px;
+            }
+            QFrame#ImageProcessFrame {
+                background-color: #e6f7ff;
+            }
+            QFrame#ReconstructionFrame {
+                background-color: #fff2e6;
+            }
+            QFrame#VisualizationFrame {
+                background-color: #e6ffe6;
+            }
+            QMessageBox {
+                background-color: #ffffff;
+                color: black;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: black;
+                font-size: 14px;
+                font-family: "Microsoft YaHei UI", Arial, sans-serif;
+            }
+            QTextEdit {
+                background-color: #ffffff;
+                color: #000000;
+                font-size: 14px;
+                font-family: "Microsoft YaHei UI", Arial, sans-serif;
+            }
+        """)
 
         self.layout = QVBoxLayout()
-        self.layout.setSpacing(12)  # 调整控件之间的间距
+        self.layout.setSpacing(12)
 
         # 图像处理部分
         self.image_process_frame = QFrame()
@@ -164,8 +162,8 @@ class MainWindow(QMainWindow):
 
         self.process_images_button = QPushButton("图像录入", self)
         self.process_images_button.setObjectName("PrimaryButton")
-        self.process_images_button.setFont(QFont("Microsoft YaHei UI", 14))  # 调整字体大小
-        self.process_images_button.setFixedSize(160, 40)  # 调整按钮大小
+        self.process_images_button.setFont(QFont("Microsoft YaHei UI", 14))
+        self.process_images_button.setFixedSize(160, 40)
         self.process_images_button.clicked.connect(self.process_images)
         self.image_process_layout.addWidget(self.process_images_button, alignment=Qt.AlignCenter)
 
@@ -205,8 +203,8 @@ class MainWindow(QMainWindow):
 
         self.reconstruct_button = QPushButton("进行三维重建", self)
         self.reconstruct_button.setObjectName("PrimaryButton")
-        self.reconstruct_button.setFont(QFont("Microsoft YaHei UI", 16))  # 调整字体大小和加粗
-        self.reconstruct_button.setFixedSize(200, 50)  # 调整按钮大小
+        self.reconstruct_button.setFont(QFont("Microsoft YaHei UI", 16))
+        self.reconstruct_button.setFixedSize(200, 50)
         self.reconstruct_button.clicked.connect(self.run_reconstruction)
         self.reconstruction_layout.addWidget(self.reconstruct_button, alignment=Qt.AlignCenter)
 
@@ -217,6 +215,7 @@ class MainWindow(QMainWindow):
 
         self.log_output = QTextEdit(self)
         self.log_output.setReadOnly(True)
+        self.log_output.setStyleSheet("color: black;")  # 设置字体颜色为黑色
         self.reconstruction_layout.addWidget(self.log_output)
 
         self.reconstruction_frame.setLayout(self.reconstruction_layout)
@@ -235,8 +234,8 @@ class MainWindow(QMainWindow):
 
         self.visualize_button = QPushButton("查看结果", self)
         self.visualize_button.setObjectName("PrimaryButton")
-        self.visualize_button.setFont(QFont("Microsoft YaHei UI", 14))  # 调整字体大小
-        self.visualize_button.setFixedSize(160, 40)  # 调整按钮大小
+        self.visualize_button.setFont(QFont("Microsoft YaHei UI", 14))
+        self.visualize_button.setFixedSize(160, 40)
         self.visualize_button.clicked.connect(self.visualize_results)
         self.visualization_layout.addWidget(self.visualize_button, alignment=Qt.AlignCenter)
 
@@ -287,7 +286,7 @@ class MainWindow(QMainWindow):
 
     def run_command(self, command, success_message, progress_queue=None, progress_bar=False):
         if progress_bar:
-            self.log_output.clear()  # 清空日志区域
+            self.log_output.clear()
             if not hasattr(self, 'worker') or self.worker is None:
                 self.worker = Worker(command, progress_queue)
                 self.worker.progress_message.connect(self.update_log)
@@ -300,7 +299,7 @@ class MainWindow(QMainWindow):
                 self.worker.finished.connect(lambda message: self.on_command_finished(message, success_message))
                 self.worker.start()
         else:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
             while process.poll() is None:
                 if progress_queue and not progress_queue.empty():
                     message = progress_queue.get()
@@ -312,14 +311,14 @@ class MainWindow(QMainWindow):
                 self.show_message(success_message)
 
     def update_log(self, message):
-        self.log_output.append(message)  # 将日志信息添加到日志区域
+        self.log_output.append(message)
 
     def on_command_finished(self, message, success_message):
         if "成功" in message:
             self.show_message(success_message)
         else:
             self.show_error(f"操作失败，请查看日志文件了解详细信息：{message}")
-        self.worker = None  # Reset worker after command finishes
+        self.worker = None
 
     def show_error(self, message):
         error_dialog = QMessageBox(self)
