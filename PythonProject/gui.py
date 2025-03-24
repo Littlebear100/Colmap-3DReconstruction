@@ -21,7 +21,7 @@ class Worker(QThread):
         self.logger = get_logger(__name__)
 
     def run(self):
-        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', shell=True)
+        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
         while True:
             output = process.stdout.readline()
             if output == '' and process.poll() is not None:
@@ -302,7 +302,7 @@ class MainWindow(QMainWindow):
                 self.worker.finished.connect(lambda message: self.on_command_finished(message, success_message))
                 self.worker.start()
         else:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', shell=True)
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
             while process.poll() is None:
                 if progress_queue and not progress_queue.empty():
                     message = progress_queue.get()
