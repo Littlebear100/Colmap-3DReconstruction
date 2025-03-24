@@ -1,9 +1,13 @@
 import sys
 import subprocess
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QLabel, QLineEdit, QMessageBox, QFrame, QTextEdit
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,
+    QFileDialog, QLabel, QLineEdit, QMessageBox, QFrame
+)
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QPalette, QBrush, QLinearGradient, QColor
-from multiprocessing import Queue
+from multiprocessing import Manager
+from logging_config import get_logger
 
 class Worker(QThread):
     finished = Signal(str)
@@ -14,18 +18,24 @@ class Worker(QThread):
         self.command = command
         self.progress_queue = progress_queue
         self.error_message = None
+        self.logger = get_logger(__name__)
 
     def run(self):
         process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', shell=True)
-        while process.poll() is None:
-            if self.progress_queue and not self.progress_queue.empty():
-                message = self.progress_queue.get()
-                self.progress_message.emit(message)
-        stdout, stderr = process.communicate()
-        if process.returncode != 0:
-            self.error_message = stderr
-        else:
-            self.error_message = None
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                self.progress_message.emit(output.strip())
+                self.logger.info(output.strip())
+        stderr_output = process.stderr.read()
+        if stderr_output:
+            self.progress_message.emit(stderr_output.strip())
+            self.logger.error(stderr_output.strip())
+        exit_code = process.poll()
+        if exit_code != 0:
+            self.error_message = stderr_output.strip()
         self.finished.emit(self.error_message or "成功")
 
 class MainWindow(QMainWindow):
@@ -124,12 +134,6 @@ class MainWindow(QMainWindow):
                 font-size: 14px;
                 font-family: "Microsoft YaHei UI", Arial, sans-serif;
             }
-            QTextEdit {
-                background-color: #ffffff;
-                color: #000000;
-                font-size: 14px;
-                font-family: "Microsoft YaHei UI", Arial, sans-serif;
-            }
         """)
 
         self.layout = QVBoxLayout()
@@ -213,11 +217,6 @@ class MainWindow(QMainWindow):
         self.reconstruction_description.setFont(QFont("Microsoft YaHei UI", 14))
         self.reconstruction_layout.addWidget(self.reconstruction_description, alignment=Qt.AlignCenter)
 
-        self.log_output = QTextEdit(self)
-        self.log_output.setReadOnly(True)
-        self.log_output.setStyleSheet("color: black;")  # 设置字体颜色为黑色
-        self.reconstruction_layout.addWidget(self.log_output)
-
         self.reconstruction_frame.setLayout(self.reconstruction_layout)
         self.layout.addWidget(self.reconstruction_frame)
 
@@ -265,15 +264,20 @@ class MainWindow(QMainWindow):
     def process_images(self):
         image_folder = self.image_folder_path.text()
         if image_folder:
-            progress_queue = Queue()
-            self.run_command(["python", "ImageProcessor.py"], "图像录入成功", progress_queue, True)
+            manager = Manager()
+            progress_queue = manager.Queue()
+            self.worker = Worker(["python", "ImageProcessor.py"], progress_queue)
+            self.worker.progress_message.connect(self.update_log)
+            self.worker.finished.connect(lambda message: self.on_command_finished(message, "图像录入成功"))
+            self.worker.start()
         else:
             self.show_error("请选择图像文件夹")
 
     def run_reconstruction(self):
         workspace_folder = self.workspace_folder_path.text()
         if workspace_folder:
-            progress_queue = Queue()
+            manager = Manager()
+            progress_queue = manager.Queue()
             self.worker = Worker(["python", "colmapReconstruction.py"], progress_queue)
             self.worker.progress_message.connect(self.update_log)
             self.worker.finished.connect(lambda message: self.on_command_finished(message, "三维重建成功"))
@@ -286,7 +290,6 @@ class MainWindow(QMainWindow):
 
     def run_command(self, command, success_message, progress_queue=None, progress_bar=False):
         if progress_bar:
-            self.log_output.clear()
             if not hasattr(self, 'worker') or self.worker is None:
                 self.worker = Worker(command, progress_queue)
                 self.worker.progress_message.connect(self.update_log)
@@ -299,7 +302,7 @@ class MainWindow(QMainWindow):
                 self.worker.finished.connect(lambda message: self.on_command_finished(message, success_message))
                 self.worker.start()
         else:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', shell=True)
             while process.poll() is None:
                 if progress_queue and not progress_queue.empty():
                     message = progress_queue.get()
@@ -311,7 +314,7 @@ class MainWindow(QMainWindow):
                 self.show_message(success_message)
 
     def update_log(self, message):
-        self.log_output.append(message)
+        print(message)
 
     def on_command_finished(self, message, success_message):
         if "成功" in message:
