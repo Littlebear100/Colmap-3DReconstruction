@@ -1,57 +1,149 @@
-import os
 import subprocess
-from logging_config import get_logger
+import os
+import json
+import logging
+from multiprocessing import Queue
+from PySide6.QtWidgets import QMessageBox
 
-logger = get_logger(__name__)
+class ColmapReconstructor:
+    def __init__(self, config, progress_queue=None):
+        try:
+            self.image_folder = config["output_folder"]
+            self.workspace_folder = config["workspace_folder"]
+            self.colmap_executable = config["colmap_executable"]
+        except KeyError as e:
+            raise KeyError(f"Missing configuration key: {e}")
+        self.progress_queue = progress_queue
 
-def run_command(command, step_name):
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', shell=True)
-    stdout, stderr = process.communicate()
-    if process.returncode == 0:
-        logger.info(f"{step_name} step completed successfully.")
-    else:
-        logger.error(f"{step_name} step failed with error: {stderr}")
+        self.check_paths()
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def feature_extraction(database_path, image_path):
-    command = f'colmap feature_extractor --database_path {database_path} --image_path {image_path} --ImageReader.camera_model PINHOLE --SiftExtraction.max_num_features 10000'
-    run_command(command, "Feature Extraction")
+    def check_paths(self):
+        paths = [
+            self.image_folder,
+            self.workspace_folder,
+            self.colmap_executable
+        ]
+        for path in paths:
+            logging.debug(f"Checking path: {path}")
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Path does not exist: {path}")
 
-def exhaustive_matching(database_path):
-    command = f'colmap exhaustive_matcher --database_path {database_path}'
-    run_command(command, "Exhaustive Matching")
+    def run_command(self, command, description):
+        command_str = ' '.join(command)
+        logging.debug(f"Running command: {command_str}")
+        if self.progress_queue:
+            self.progress_queue.put(f"Running command: {command_str}")
+        result = subprocess.run(command, capture_output=True, text=True, shell=True)
+        logging.debug(f"Command stdout: {result.stdout}")
+        logging.debug(f"Command stderr: {result.stderr}")
+        if self.progress_queue:
+            self.progress_queue.put(f"Command stdout: {result.stdout}")
+            self.progress_queue.put(f"Command stderr: {result.stderr}")
+        if result.returncode != 0:
+            error_message = f"Error executing: {command_str}\n{result.stderr}"
+            logging.error(f"{error_message}")
+            if self.progress_queue:
+                self.progress_queue.put(error_message)
+            raise RuntimeError(f"Command failed: {command_str}\n{result.stderr}")
+        if self.progress_queue:
+            self.progress_queue.put(description + " completed")
+        logging.debug(f"{description} completed")
 
-def sparse_reconstruction(database_path, image_path, sparse_path):
-    command = f'colmap mapper --database_path {database_path} --image_path {image_path} --output_path {sparse_path} --Mapper.num_threads 8'
-    run_command(command, "Sparse Reconstruction")
+    def run_colmap(self):
+        if not os.path.exists(self.workspace_folder):
+            os.makedirs(self.workspace_folder)
 
-def image_undistortion(image_path, sparse_path, undistorted_path):
-    command = f'colmap image_undistorter --image_path {image_path} --input_path {sparse_path} --output_path {undistorted_path} --output_type COLMAP'
-    run_command(command, "Image Undistortion")
+        sparse_folder = os.path.join(self.workspace_folder, "sparse")
+        if not os.path.exists(sparse_folder):
+            os.makedirs(sparse_folder)
 
-def dense_reconstruction(undistorted_path, dense_path):
-    command = f'colmap patch_match_stereo --workspace_path {undistorted_path} --workspace_format COLMAP --PatchMatchStereo.geom_consistency true'
-    run_command(command, "Dense Reconstruction")
+        dense_folder = os.path.join(self.workspace_folder, "dense")
+        if not os.path.exists(dense_folder):
+            os.makedirs(dense_folder)
 
-def dense_fusion(undistorted_path, dense_path):
-    command = f'colmap stereo_fusion --workspace_path {undistorted_path} --workspace_format COLMAP --input_type geometric --output_path {dense_path}/fused.ply'
-    run_command(command, "Dense Fusion")
+        fused_output_path = os.path.join(dense_folder, "fused.ply")
+        meshed_output_path = os.path.join(dense_folder, "meshed.ply")
 
-def mesh_generation(dense_path, output_mesh_path):
-    command = f'colmap poisson_mesher --input_path {dense_path}/fused.ply --output_path {output_mesh_path} --PoissonMeshing.trim 10'
-    run_command(command, "Mesh Generation")
+        commands = [
+            ("Feature Extraction", [
+                self.colmap_executable, "feature_extractor",
+                "--database_path", os.path.join(self.workspace_folder, "database.db"),
+                "--image_path", self.image_folder,
+                "--ImageReader.single_camera", "1",
+                "--SiftExtraction.max_num_features", "50000",  # Reduced from 100000
+                "--SiftExtraction.estimate_affine_shape", "true",
+                "--SiftExtraction.domain_size_pooling", "true"
+            ]),
+            ("Exhaustive Matching", [
+                self.colmap_executable, "exhaustive_matcher",
+                "--database_path", os.path.join(self.workspace_folder, "database.db"),
+                "--ExhaustiveMatching.block_size", "50"  # Reduced block size
+            ]),
+            ("Sparse Reconstruction", [
+                self.colmap_executable, "mapper",
+                "--database_path", os.path.join(self.workspace_folder, "database.db"),
+                "--image_path", self.image_folder,
+                "--output_path", sparse_folder,
+                "--Mapper.ba_refine_focal_length", "1",
+                "--Mapper.ba_refine_principal_point", "1",
+                "--Mapper.ba_refine_extra_params", "1"
+            ]),
+            ("Image Undistortion", [
+                self.colmap_executable, "image_undistorter",
+                "--image_path", self.image_folder,
+                "--input_path", os.path.join(sparse_folder, "0"),
+                "--output_path", dense_folder,
+                "--output_type", "COLMAP"
+            ]),
+            ("Dense Reconstruction", [
+                self.colmap_executable, "patch_match_stereo",
+                "--workspace_path", dense_folder,
+                "--workspace_format", "COLMAP",
+                "--PatchMatchStereo.geom_consistency", "true",
+                "--PatchMatchStereo.window_radius", "10",  # Reduced window radius
+                "--PatchMatchStereo.num_iterations", "5"  # Reduced number of iterations
+            ]),
+            ("Dense Fusion", [
+                self.colmap_executable, "stereo_fusion",
+                "--workspace_path", dense_folder,
+                "--workspace_format", "COLMAP",
+                "--input_type", "geometric",
+                "--output_path", fused_output_path
+            ]),
+            ("Mesh Generation", [
+                self.colmap_executable, "poisson_mesher",
+                "--input_path", fused_output_path,
+                "--output_path", meshed_output_path
+            ])
+        ]
+
+        for description, command in commands:
+            try:
+                self.run_command(command, description)
+                print(f"{description} step completed successfully.")
+            except RuntimeError as e:
+                logging.error(f"{description} failed with error: {e}")
+                if self.progress_queue:
+                    self.progress_queue.put(f"[ERROR] {description} failed with error: {e}")
+                break
+
+        # 三维重建完成后弹出消息框
+        self.show_message("三维重建完成")
+
+    def show_message(self, message):
+        message_dialog = QMessageBox()
+        message_dialog.setIcon(QMessageBox.Information)
+        message_dialog.setWindowTitle("信息")
+        message_dialog.setText(message)
+        message_dialog.setStandardButtons(QMessageBox.Ok)
+        message_dialog.setDefaultButton(QMessageBox.Ok)
+        message_dialog.exec()
 
 if __name__ == "__main__":
-    database_path = "path/to/database.db"
-    image_path = "path/to/images"
-    sparse_path = "path/to/sparse"
-    undistorted_path = "path/to/undistorted"
-    dense_path = "path/to/dense"
-    output_mesh_path = "path/to/output_mesh.ply"
-
-    feature_extraction(database_path, image_path)
-    exhaustive_matching(database_path)
-    sparse_reconstruction(database_path, image_path, sparse_path)
-    image_undistortion(image_path, sparse_path, undistorted_path)
-    dense_reconstruction(undistorted_path, dense_path)
-    dense_fusion(undistorted_path, dense_path)
-    mesh_generation(dense_path, output_mesh_path)
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    progress_queue = Queue()
+    reconstructor = ColmapReconstructor(config, progress_queue)
+    reconstructor.run_colmap()
+    print("3D reconstruction process completed.")
