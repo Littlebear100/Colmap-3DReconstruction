@@ -314,7 +314,8 @@ class MainWindow(QMainWindow):
                 self.show_message(success_message)
 
     def update_log(self, message):
-        print(message)
+        if "三维重建" in message:
+            print(message)
 
     def on_command_finished(self, message, success_message):
         if "成功" in message:
