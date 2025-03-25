@@ -71,7 +71,7 @@ class ColmapReconstructor:
                 "--database_path", os.path.join(self.workspace_folder, "database.db"),
                 "--image_path", self.image_folder,
                 "--ImageReader.single_camera", "1",
-                "--SiftExtraction.max_num_features", "80000",  # 减少特征点数量
+                "--SiftExtraction.max_num_features", "100000",  # 增加特征点数量
                 "--SiftExtraction.estimate_affine_shape", "true",
                 "--SiftExtraction.domain_size_pooling", "true"
             ]),
@@ -101,14 +101,14 @@ class ColmapReconstructor:
                 "--workspace_path", dense_folder,
                 "--workspace_format", "COLMAP",
                 "--PatchMatchStereo.geom_consistency", "true",
-                "--PatchMatchStereo.window_radius", "5",  # 减小窗口半径
-                "--PatchMatchStereo.num_iterations", "3"  # 减少迭代次数
+                "--PatchMatchStereo.window_radius", "7",  # 增加窗口半径
+                "--PatchMatchStereo.num_iterations", "5"  # 增加迭代次数
             ]),
             ("Dense Fusion", [
                 self.colmap_executable, "stereo_fusion",
                 "--workspace_path", dense_folder,
                 "--workspace_format", "COLMAP",
-                "--input_type", "geometric",
+                "--input_type", "photometric",  # 使用光度一致性
                 "--output_path", fused_output_path
             ]),
             ("Mesh Generation", [
