@@ -73,7 +73,10 @@ class ColmapReconstructor:
                 "--ImageReader.single_camera", "1",
                 "--SiftExtraction.max_num_features", "100000",  # 增加特征点数量
                 "--SiftExtraction.estimate_affine_shape", "true",
-                "--SiftExtraction.domain_size_pooling", "true"
+                "--SiftExtraction.domain_size_pooling", "true",
+                "--SiftExtraction.num_octaves", "4",  # 增加金字塔层数
+                "--SiftExtraction.peak_threshold", "0.01",  # 降低峰值阈值
+                "--SiftExtraction.edge_threshold", "5"  # 降低边缘阈值
             ]),
             ("Exhaustive Matching", [
                 self.colmap_executable, "exhaustive_matcher",
@@ -102,19 +105,23 @@ class ColmapReconstructor:
                 "--workspace_format", "COLMAP",
                 "--PatchMatchStereo.geom_consistency", "true",
                 "--PatchMatchStereo.window_radius", "7",  # 增加窗口半径
-                "--PatchMatchStereo.num_iterations", "5"  # 增加迭代次数
+                "--PatchMatchStereo.num_iterations", "5",  # 增加迭代次数
+                "--PatchMatchStereo.filter", "1",  # 启用滤波器
+                "--PatchMatchStereo.max_image_size", "3200"  # 增加最大图像尺寸
             ]),
             ("Dense Fusion", [
                 self.colmap_executable, "stereo_fusion",
                 "--workspace_path", dense_folder,
                 "--workspace_format", "COLMAP",
                 "--input_type", "photometric",  # 使用光度一致性
-                "--output_path", fused_output_path
+                "--output_path", fused_output_path,
+                "--StereoFusion.check_num_images", "5"  # 提高检查图像数量
             ]),
             ("Mesh Generation", [
                 self.colmap_executable, "poisson_mesher",
                 "--input_path", fused_output_path,
                 "--output_path", meshed_output_path
+                # 移除深度参数
             ])
         ]
 
