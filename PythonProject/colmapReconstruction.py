@@ -70,17 +70,24 @@ class ColmapReconstructor:
                 self.colmap_executable, "feature_extractor",
                 "--database_path", os.path.join(self.workspace_folder, "database.db"),
                 "--image_path", self.image_folder,
-                "--ImageReader.single_camera", "1"
+                "--ImageReader.single_camera", "1",
+                "--SiftExtraction.max_num_features", "80000",  # 减少特征点数量
+                "--SiftExtraction.estimate_affine_shape", "true",
+                "--SiftExtraction.domain_size_pooling", "true"
             ]),
             ("Exhaustive Matching", [
                 self.colmap_executable, "exhaustive_matcher",
-                "--database_path", os.path.join(self.workspace_folder, "database.db")
+                "--database_path", os.path.join(self.workspace_folder, "database.db"),
+                "--ExhaustiveMatching.block_size", "100"  # 增加块大小
             ]),
             ("Sparse Reconstruction", [
                 self.colmap_executable, "mapper",
                 "--database_path", os.path.join(self.workspace_folder, "database.db"),
                 "--image_path", self.image_folder,
-                "--output_path", sparse_folder
+                "--output_path", sparse_folder,
+                "--Mapper.ba_refine_focal_length", "1",
+                "--Mapper.ba_refine_principal_point", "1",
+                "--Mapper.ba_refine_extra_params", "1"
             ]),
             ("Image Undistortion", [
                 self.colmap_executable, "image_undistorter",
@@ -93,7 +100,9 @@ class ColmapReconstructor:
                 self.colmap_executable, "patch_match_stereo",
                 "--workspace_path", dense_folder,
                 "--workspace_format", "COLMAP",
-                "--PatchMatchStereo.geom_consistency", "true"
+                "--PatchMatchStereo.geom_consistency", "true",
+                "--PatchMatchStereo.window_radius", "5",  # 减小窗口半径
+                "--PatchMatchStereo.num_iterations", "3"  # 减少迭代次数
             ]),
             ("Dense Fusion", [
                 self.colmap_executable, "stereo_fusion",
